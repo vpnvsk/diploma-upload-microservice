@@ -18,7 +18,7 @@ func main() {
 	cfg := config.LoadConfig()
 	log := setUpLogger(cfg.ENV)
 	repo := repository.NewRepository(log, cfg)
-	serv := service.NewService(log, repo)
+	serv := service.NewService(log, repo, cfg)
 	handl := handler.NewHandler(log, serv)
 	srv := new(internal.Server)
 	go func() {
