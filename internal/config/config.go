@@ -14,6 +14,7 @@ type Config struct {
 	DBPassword   string
 	DBHost       string
 	SSLMode      string
+	DBName       string
 	ENV          string
 }
 
@@ -37,6 +38,7 @@ func LoadConfig() *Config {
 			DBHost:       os.Getenv("DB_HOST"),
 			SSLMode:      os.Getenv("SSL_MODE"),
 			ENV:          os.Getenv("ENV"),
+			DBName:       os.Getenv("DB_NAME"),
 		}
 	})
 	return config

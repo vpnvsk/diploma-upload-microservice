@@ -24,7 +24,7 @@ func (h *Handler) InitRoutes() *gin.Engine {
 	{
 		auth := api.Group("/upload")
 		{
-			auth.POST("/", h.Upload)
+			auth.POST("/", h.UploadPatents)
 		}
 	}
 	return router

@@ -11,19 +11,19 @@ import (
 
 type Service struct {
 	log *slog.Logger
-	APIClient
+	APIClientInterface
 	DBClient
 }
 
 func NewService(log *slog.Logger, repo *repository.Repository, cfg *config.Config) *Service {
 	return &Service{
-		log:       log,
-		APIClient: api_client.NewAPIClient(log, &repo.KTMineRepository, cfg),
-		DBClient:  db_client.NewDBClient(log, &repo.DBRepository),
+		log:                log,
+		APIClientInterface: api_client.NewAPIClient(log, repo.KTMineRepositoryInterface, cfg),
+		DBClient:           db_client.NewDBClient(log, &repo.DBRepository),
 	}
 }
 
-type APIClient interface {
+type APIClientInterface interface {
 	GetData(input model.UploadInput) error
 }
 
