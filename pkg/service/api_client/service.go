@@ -10,6 +10,8 @@ import (
 	"github.com/vpnvsk/amunetip-patent-upload/internal/utils"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/repository"
 	"log/slog"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -42,11 +44,11 @@ func (c *APIClient) GetData(input model.UploadInput) error {
 		wg.Add(1)
 		requestBody := model.NewFilterRequestBody([]model.SingleFilter{*model.NewSingleFilter(
 			input.PublicationNumbers[i:end], "documentnumber", "and")},
-			c.cfg.KTMineAPIKey, i, chunkSize)
+			c.cfg.KTMineAPIKey, 0, chunkSize)
 		go func() error {
 			defer wg.Done()
 			if err := c.getAndParseData(requestBody, packagesChan); err != nil {
-				return err
+				fmt.Println(err)
 			}
 			return nil
 		}()
@@ -62,7 +64,6 @@ func (c *APIClient) getAndParseData(requestBody model.FiltersRequestBody, ch cha
 	if err != nil {
 		return err
 	}
-	fmt.Println("after request")
 	err = c.parseResponse(body, ch)
 
 	return err
@@ -84,7 +85,6 @@ func (c *APIClient) sendRequest(requestBody model.FiltersRequestBody) (*[]byte, 
 
 func (c *APIClient) parseResponse(body *[]byte, ch chan *model.ParsedPatentsData) error {
 	var data map[string]interface{}
-	var wg sync.WaitGroup
 	err := json.Unmarshal(*body, &data)
 	if err != nil {
 		return err
@@ -97,37 +97,31 @@ func (c *APIClient) parseResponse(body *[]byte, ch chan *model.ParsedPatentsData
 	if !ok {
 		return errors.New("can't parse response body")
 	}
+	fmt.Println(len(items))
 
 	for _, item := range items {
-		fmt.Println("in gorutine")
 		itemMap, ok := item.(map[string]interface{})
 		if !ok {
 			return errors.New("can't parse response body")
 		}
-		wg.Add(1)
-		func(item map[string]interface{}) {
-			defer wg.Done()
-			parsedPatent := c.parsePatent(item)
-			parsedInventors, parsedInventorPatentLink := c.parseInventors(item, parsedPatent.Id)
-			parsedAssignees, parsedAssigneePatentLink := c.parseAssignees(item, parsedPatent.Id)
-			parsedJurisdictions, parsedJurisdictionsPatentLink := c.parseJurisdictions(item, parsedPatent.Id,
-				parsedPatent.EarliestPriorityDate)
-			fmt.Println(parsedJurisdictions)
-			parsedClaims := []model.Claim{}
+		parsedPatent := c.parsePatent(itemMap)
+		parsedInventors, parsedInventorPatentLink := c.parseInventors(itemMap, parsedPatent.Id)
+		parsedAssignees, parsedAssigneePatentLink := c.parseAssignees(itemMap, parsedPatent.Id)
+		parsedJurisdictions, parsedJurisdictionsPatentLink := c.parseJurisdictions(itemMap, parsedPatent.Id,
+			parsedPatent.EarliestPriorityDate)
+		parsedClaims := c.parseClaim(itemMap, parsedPatent.Id)
 
-			ch <- &model.ParsedPatentsData{
-				Patent:                  parsedPatent,
-				Inventors:               parsedInventors,
-				PatentInventorsLink:     parsedInventorPatentLink,
-				Assignees:               parsedAssignees,
-				PatentAssigneesLink:     parsedAssigneePatentLink,
-				Jurisdictions:           parsedJurisdictions,
-				PatentJurisdictionsLink: parsedJurisdictionsPatentLink,
-				Claims:                  &parsedClaims,
-			}
-		}(itemMap)
+		ch <- &model.ParsedPatentsData{
+			Patent:                  parsedPatent,
+			Inventors:               parsedInventors,
+			PatentInventorsLink:     parsedInventorPatentLink,
+			Assignees:               parsedAssignees,
+			PatentAssigneesLink:     parsedAssigneePatentLink,
+			Jurisdictions:           parsedJurisdictions,
+			PatentJurisdictionsLink: parsedJurisdictionsPatentLink,
+			Claims:                  parsedClaims,
+		}
 	}
-	wg.Wait()
 
 	return nil
 }
@@ -288,15 +282,17 @@ func (c *APIClient) parsePatent(data map[string]interface{}) *model.ParsedPatent
 
 	earliestPriorityDate, _ := data["minPriorityDate"].(string)
 	estimatedExpiryDate, _ := data["projectedExpirationDate"].(string)
-	fmt.Println(earliestPriorityDate)
 	earliestPriorityDateParsed, err := time.Parse("2006-01-02", earliestPriorityDate)
 	if err != nil {
 		earliestPriorityDateParsed = time.Time{}
 	}
-	fmt.Println(earliestPriorityDateParsed)
 	estimatedExpiryDateParsed, err := time.Parse("2006-01-02", estimatedExpiryDate)
 	if err != nil {
 		estimatedExpiryDateParsed = time.Time{}
+	}
+	var countOfCitedByPatents int
+	if backwardCitations, ok := data["backwardCitations"].([]interface{}); ok && backwardCitations != nil {
+		countOfCitedByPatents = len(backwardCitations)
 	}
 
 	return &model.ParsedPatent{
@@ -307,7 +303,7 @@ func (c *APIClient) parsePatent(data map[string]interface{}) *model.ParsedPatent
 		EarliestPriorityDate:           earliestPriorityDateParsed,
 		EstimatedExpiryDate:            estimatedExpiryDateParsed,
 		PublicationNumber:              publicationNumber,
-		CountOfCitedByPatents:          len(data["backwardCitations"].([]interface{})),
+		CountOfCitedByPatents:          countOfCitedByPatents,
 		Description:                    descriptionResult,
 		BriefDescriptionOfDrawings:     briefDescriptionOfDrawingsResult,
 		SimpleLegalStatus:              simpleLegalStatus,
@@ -372,4 +368,138 @@ func (c *APIClient) parseJurisdictions(data map[string]interface{}, patentId uui
 		}
 	}
 	return &jurisdictions, &jurisdictionPatentLink
+}
+
+type claimMapKey struct {
+	claimID     string
+	claimNumber int
+}
+
+type claimMapValue struct {
+	dependent        []string
+	dependentNumbers map[claimMapKey]struct{}
+	claim            string
+}
+
+func (c *APIClient) parseClaim(data map[string]interface{}, patentId uuid.UUID) *[]model.Claim {
+	claimsIds := make(map[string]struct{})
+	claimsMap := make(map[claimMapKey]claimMapValue)
+	claimsList, ok := data["claimsXml"].([]interface{})
+	if ok {
+		for _, value := range claimsList {
+			if claimObject, ok := value.(map[string]interface{}); ok {
+				singleClaim, ok := claimObject["xmlText"].(string)
+				if !ok {
+					continue
+				}
+				singleClaim = utils.RemoveHTMLTags(singleClaim)
+				claimId, _ := claimObject["claimId"].(string)
+				pattern := regexp.MustCompile(`\d{1,2}$`)
+				match := pattern.FindString(claimId)
+				var claimNumber int
+				var err error
+				if match != "" {
+					claimNumber, err = strconv.Atoi(match)
+					if err == nil {
+						continue
+					}
+				}
+				claimStruct := claimMapKey{claimID: claimId, claimNumber: claimNumber}
+
+				if _, exists := claimsIds[claimId]; !exists {
+					isDependent, ok := claimObject["isDependent"].(bool)
+					if !ok {
+						continue
+					}
+					if !isDependent {
+						if _, exists := claimsMap[claimStruct]; !exists {
+							claimsMap[claimStruct] = claimMapValue{claim: singleClaim + "\n", dependent: make([]string, 0),
+								dependentNumbers: make(map[claimMapKey]struct{})}
+						}
+					} else {
+						claimReferences, ok := claimObject["claimReferences"].([]string)
+						if ok {
+							if key, exists := checkClaimMapKey(claimReferences[0], claimsMap); exists {
+								value, _ := claimsMap[key]
+								value.dependentNumbers[claimStruct] = struct{}{}
+								value.dependent = append(value.dependent, singleClaim)
+								claimsMap[key] = value
+							} else {
+								for independentClaimNumber, dependentClaims := range claimsMap {
+									if _, exists := checkDependentClaimMapKey(claimReferences[0], dependentClaims.dependentNumbers); exists {
+										dependentClaims.dependent = append(dependentClaims.dependent, singleClaim)
+										dependentClaims.dependentNumbers[claimStruct] = struct{}{}
+										claimsMap[independentClaimNumber] = dependentClaims
+									}
+								}
+							}
+						}
+
+					}
+				} else {
+					if key, exists := checkClaimMapKey(claimId, claimsMap); exists {
+						value, _ := claimsMap[key]
+						value.claim += singleClaim + "\n"
+						claimsMap[key] = value
+					} else {
+						claimReferences, ok := claimObject["claimReferences"].([]string)
+						if ok {
+							if key, exists := checkClaimMapKey(claimReferences[0], claimsMap); exists {
+								value := claimsMap[key]
+								value.dependentNumbers[claimStruct] = struct{}{}
+								value.dependent = append(value.dependent, singleClaim)
+								claimsMap[key] = value
+							} else {
+								for independentClaimNumber, dependentClaim := range claimsMap {
+									if _, exists := checkDependentClaimMapKey(claimReferences[0], dependentClaim.dependentNumbers); exists {
+										value := claimsMap[independentClaimNumber]
+										value.dependentNumbers[claimStruct] = struct{}{}
+										value.dependent = append(value.dependent, singleClaim)
+										claimsMap[independentClaimNumber] = value
+									}
+								}
+							}
+						} else {
+							for independentClaimNumber, dependentClaim := range claimsMap {
+								if _, exists := checkDependentClaimMapKey(claimId, dependentClaim.dependentNumbers); exists {
+									value := claimsMap[independentClaimNumber]
+									value.dependent = append(value.dependent, singleClaim)
+									claimsMap[independentClaimNumber] = value
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	claims := make([]model.Claim, 0, len(claimsMap))
+
+	for key, value := range claimsMap {
+		claims = append(claims, model.Claim{
+			PatentID:         patentId,
+			ClaimNumber:      key.claimNumber,
+			IndependentClaim: value.claim,
+			DependantClaims:  value.dependent,
+		})
+	}
+	return &claims
+}
+
+func checkClaimMapKey(claimId string, claimMap map[claimMapKey]claimMapValue) (claimMapKey, bool) {
+	for key, _ := range claimMap {
+		if key.claimID == claimId {
+			return key, true
+		}
+	}
+	return claimMapKey{}, false
+}
+
+func checkDependentClaimMapKey(claimId string, claimMap map[claimMapKey]struct{}) (claimMapKey, bool) {
+	for key, _ := range claimMap {
+		if key.claimID == claimId {
+			return key, true
+		}
+	}
+	return claimMapKey{}, false
 }

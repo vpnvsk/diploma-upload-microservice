@@ -1,6 +1,7 @@
 package repository
 
 import (
+	_ "github.com/lib/pq"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/repository/db_repository"

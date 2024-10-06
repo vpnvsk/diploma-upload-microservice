@@ -24,7 +24,7 @@ type ParsedPatent struct {
 	CPC                            string    `json:"cpc"`
 	EarliestPriorityDate           time.Time `json:"earliest_priority_date"`
 	EstimatedExpiryDate            time.Time `json:"estimated_expiry_date"`
-	PublicationNumber              string    `json:"publication_number"`
+	PublicationNumber              string    `json:"documentNumber"`
 	CountOfCitedByPatents          int       `json:"count_of_cited_by_patents"`
 	Description                    string    `json:"description"`
 	BriefDescriptionOfDrawings     string    `json:"brief_description_of_drawings"`
@@ -57,7 +57,7 @@ type SimpleFamilyJurisdiction struct {
 }
 
 type Claim struct {
-	PatentID         string `json:"patent_id"`
+	PatentID         uuid.UUID `json:"patent_id"`
 	ClaimNumber      int
 	IndependentClaim string `json:"independent_claim"`
 	DependantClaims  []string

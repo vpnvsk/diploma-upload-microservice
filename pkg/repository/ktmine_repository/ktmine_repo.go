@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"time"
 )
 
 type KTMineRepository struct {
@@ -40,7 +41,9 @@ func (r *KTMineRepository) GetFilteredData(filters model.FiltersRequestBody) (*[
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 1000 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Error("Error making POST request:", err)
