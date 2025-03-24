@@ -24,7 +24,7 @@ func NewKTMineRepository(log *slog.Logger, cfg *config.Config) *KTMineRepository
 	}
 }
 
-func (r *KTMineRepository) GetFilteredData(filters model.FiltersRequestBody) (*[]byte, error) {
+func (r *KTMineRepository) GetFilteredData(filters model.FilterInterface) (*[]byte, error) {
 	op := "repository.GetFilteredData"
 	log := r.log.With(slog.String("op", op))
 

@@ -33,7 +33,7 @@ func NewRepository(log *slog.Logger, cfg *config.Config) *Repository {
 }
 
 type KTMineRepositoryInterface interface {
-	GetFilteredData(filters model.FiltersRequestBody) (*[]byte, error)
+	GetFilteredData(filters model.FilterInterface) (*[]byte, error)
 }
 
 type DBRepository interface {

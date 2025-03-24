@@ -1,8 +1,6 @@
 package api_client
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
@@ -13,7 +11,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -32,42 +29,45 @@ func NewAPIClient(log *slog.Logger, repo repository.KTMineRepositoryInterface, c
 		repo: repo,
 	}
 }
-
 func (c *APIClient) GetData(input model.UploadInput) error {
-	var wg sync.WaitGroup
-	packagesChan := make(chan *model.ParsedPatentsData, 1000)
-	for i := 0; i < len(input.PublicationNumbers); i += chunkSize {
-		end := i + chunkSize
-		if end > len(input.PublicationNumbers) {
-			end = len(input.PublicationNumbers)
-		}
-		wg.Add(1)
-		requestBody := model.NewFilterRequestBody([]model.SingleFilter{*model.NewSingleFilter(
-			input.PublicationNumbers[i:end], "documentnumber", "and")},
-			c.cfg.KTMineAPIKey, 0, chunkSize)
-		go func() error {
-			defer wg.Done()
-			if err := c.getAndParseData(requestBody, packagesChan); err != nil {
-				fmt.Println(err)
-			}
-			return nil
-		}()
-	}
-	wg.Wait()
-	close(packagesChan)
-
 	return nil
 }
 
-func (c *APIClient) getAndParseData(requestBody model.FiltersRequestBody, ch chan *model.ParsedPatentsData) error {
-	body, err := c.sendRequest(requestBody)
-	if err != nil {
-		return err
-	}
-	err = c.parseResponse(body, ch)
+//func (c *APIClient) GetData(input model.UploadInput) error {
+//	var wg sync.WaitGroup
+//	packagesChan := make(chan *model.ParsedPatentsData, 1000)
+//	for i := 0; i < len(input.PublicationNumbers); i += chunkSize {
+//		end := i + chunkSize
+//		if end > len(input.PublicationNumbers) {
+//			end = len(input.PublicationNumbers)
+//		}
+//		wg.Add(1)
+//		requestBody := model.NewFilterRequestBody([]model.SingleParsedFilter{*model.NewSingleParsedFilter(
+//			input.PublicationNumbers[i:end], "documentnumber", nil)},
+//			c.cfg.KTMineAPIKey, 0, chunkSize, nil, []string{"all"})
+//		go func() error {
+//			defer wg.Done()
+//			if err := c.getAndParseData(requestBody, packagesChan); err != nil {
+//				fmt.Println(err)
+//			}
+//			return nil
+//		}()
+//	}
+//	wg.Wait()
+//	close(packagesChan)
+//
+//	return nil
+//}
 
-	return err
-}
+//func (c *APIClient) getAndParseData(requestBody model.FiltersRequestBody, ch chan *model.ParsedPatentsData) error {
+//	body, err := c.sendRequest(requestBody)
+//	if err != nil {
+//		return err
+//	}
+//	err = c.parseResponse(body, ch)
+//
+//	return err
+//}
 
 func (c *APIClient) sendRequest(requestBody model.FiltersRequestBody) (*[]byte, error) {
 	var body *[]byte
@@ -83,72 +83,72 @@ func (c *APIClient) sendRequest(requestBody model.FiltersRequestBody) (*[]byte, 
 	return body, err
 }
 
-func (c *APIClient) parseResponse(body *[]byte, ch chan *model.ParsedPatentsData) error {
-	var data map[string]interface{}
-	err := json.Unmarshal(*body, &data)
-	if err != nil {
-		return err
-	}
-	response, ok := data["response"].(map[string]interface{})
-	if !ok {
-		return errors.New("can't parse response body")
-	}
-	items, ok := response["items"].([]interface{})
-	if !ok {
-		return errors.New("can't parse response body")
-	}
-	fmt.Println(len(items))
+//func (c *APIClient) parseResponse(body *[]byte, ch chan *model.ParsedPatentsData) error {
+//	var data map[string]interface{}
+//	err := json.Unmarshal(*body, &data)
+//	if err != nil {
+//		return err
+//	}
+//	response, ok := data["response"].(map[string]interface{})
+//	if !ok {
+//		return errors.New("can't parse response body")
+//	}
+//	items, ok := response["items"].([]interface{})
+//	if !ok {
+//		return errors.New("can't parse response body")
+//	}
+//	fmt.Println(len(items))
+//
+//	for _, item := range items {
+//		itemMap, ok := item.(map[string]interface{})
+//		if !ok {
+//			return errors.New("can't parse response body")
+//		}
+//		parsedPatent := c.parsePatent(itemMap)
+//		parsedInventors, parsedInventorPatentLink := c.parseInventors(itemMap, parsedPatent.Id)
+//		parsedAssignees, parsedAssigneePatentLink := c.parseAssignees(itemMap, parsedPatent.Id)
+//		parsedJurisdictions, parsedJurisdictionsPatentLink := c.parseJurisdictions(itemMap, parsedPatent.Id,
+//			parsedPatent.EarliestPriorityDate)
+//		parsedClaims := c.parseClaim(itemMap, parsedPatent.Id)
+//
+//		ch <- &model.ParsedPatentsData{
+//			Patent:                  parsedPatent,
+//			Inventors:               parsedInventors,
+//			PatentInventorsLink:     parsedInventorPatentLink,
+//			Assignees:               parsedAssignees,
+//			PatentAssigneesLink:     parsedAssigneePatentLink,
+//			Jurisdictions:           parsedJurisdictions,
+//			PatentJurisdictionsLink: parsedJurisdictionsPatentLink,
+//			Claims:                  parsedClaims,
+//		}
+//	}
+//
+//	return nil
+//}
 
-	for _, item := range items {
-		itemMap, ok := item.(map[string]interface{})
-		if !ok {
-			return errors.New("can't parse response body")
-		}
-		parsedPatent := c.parsePatent(itemMap)
-		parsedInventors, parsedInventorPatentLink := c.parseInventors(itemMap, parsedPatent.Id)
-		parsedAssignees, parsedAssigneePatentLink := c.parseAssignees(itemMap, parsedPatent.Id)
-		parsedJurisdictions, parsedJurisdictionsPatentLink := c.parseJurisdictions(itemMap, parsedPatent.Id,
-			parsedPatent.EarliestPriorityDate)
-		parsedClaims := c.parseClaim(itemMap, parsedPatent.Id)
-
-		ch <- &model.ParsedPatentsData{
-			Patent:                  parsedPatent,
-			Inventors:               parsedInventors,
-			PatentInventorsLink:     parsedInventorPatentLink,
-			Assignees:               parsedAssignees,
-			PatentAssigneesLink:     parsedAssigneePatentLink,
-			Jurisdictions:           parsedJurisdictions,
-			PatentJurisdictionsLink: parsedJurisdictionsPatentLink,
-			Claims:                  parsedClaims,
-		}
-	}
-
-	return nil
-}
-
-func (c *APIClient) parseInventors(data map[string]interface{}, patentId uuid.UUID) (
-	*[]model.Inventor, *[]model.PatentInventorLink) {
-	inventors := make([]model.Inventor, 0)
-	inventorPatentLink := make([]model.PatentInventorLink, 0)
-	inventorsList, ok := data["inventors"].([]interface{})
-	if ok {
-		for _, name := range inventorsList {
-			parsedInventorName, ok := name.(map[string]interface{})
-			if ok {
-				if parsedName, ok := parsedInventorName["partyNameClean"].(string); ok {
-					inventors = append(inventors, model.Inventor{FullName: parsedName})
-					inventorPatentLink = append(inventorPatentLink, model.PatentInventorLink{
-						PatentID: patentId, InventorName: parsedName})
-				} else if parsedName, ok := parsedInventorName["partyName"].(string); ok {
-					inventors = append(inventors, model.Inventor{FullName: parsedName})
-					inventorPatentLink = append(inventorPatentLink, model.PatentInventorLink{
-						PatentID: patentId, InventorName: parsedName})
-				}
-			}
-		}
-	}
-	return &inventors, &inventorPatentLink
-}
+//func (c *APIClient) parseInventors(data map[string]interface{}, patentId uuid.UUID) (
+//	*[]model.Inventor, *[]model.PatentInventorLink) {
+//	inventors := make([]model.Inventor, 0)
+//	inventorPatentLink := make([]model.PatentInventorLink, 0)
+//	inventorsList, ok := data["inventors"].([]interface{})
+//	if ok {
+//		for _, name := range inventorsList {
+//			parsedInventorName, ok := name.(map[string]interface{})
+//			if ok {
+//				if parsedName, ok := parsedInventorName["partyNameClean"].(string); ok {
+//					inventors = append(inventors, model.Inventor{FullName: parsedName})
+//					inventorPatentLink = append(inventorPatentLink, model.PatentInventorLink{
+//						PatentID: patentId, InventorName: parsedName})
+//				} else if parsedName, ok := parsedInventorName["partyName"].(string); ok {
+//					inventors = append(inventors, model.Inventor{FullName: parsedName})
+//					inventorPatentLink = append(inventorPatentLink, model.PatentInventorLink{
+//						PatentID: patentId, InventorName: parsedName})
+//				}
+//			}
+//		}
+//	}
+//	return &inventors, &inventorPatentLink
+//}
 
 func (c *APIClient) parsePatent(data map[string]interface{}) *model.ParsedPatent {
 	publicationNumber, _ := data["documentNumber"].(string)
@@ -321,54 +321,54 @@ func (c *APIClient) parsePatent(data map[string]interface{}) *model.ParsedPatent
 	}
 }
 
-func (c *APIClient) parseAssignees(data map[string]interface{}, patentId uuid.UUID) (
-	*[]model.StandardizedCurrentAssignee, *[]model.PatentStandardizedCurrentAssigneeLink) {
-	assignees := make([]model.StandardizedCurrentAssignee, 0)
-	assigneePatentLink := make([]model.PatentStandardizedCurrentAssigneeLink, 0)
-	assigneesList, ok := data["currentAssignees"].([]interface{})
-	if ok {
-		for _, name := range assigneesList {
-			parsedInventorName, ok := name.(map[string]interface{})
-			if ok {
-				if parsedName, ok := parsedInventorName["partyNameClean"].(string); ok {
-					assignees = append(assignees, model.StandardizedCurrentAssignee{Name: parsedName})
-					assigneePatentLink = append(assigneePatentLink, model.PatentStandardizedCurrentAssigneeLink{
-						PatentID: patentId, AssigneeName: parsedName})
-				} else if parsedName, ok := parsedInventorName["partyName"].(string); ok {
-					assignees = append(assignees, model.StandardizedCurrentAssignee{Name: parsedName})
-					assigneePatentLink = append(assigneePatentLink, model.PatentStandardizedCurrentAssigneeLink{
-						PatentID: patentId, AssigneeName: parsedName})
-				}
-			}
-		}
-	}
-	return &assignees, &assigneePatentLink
-}
+//func (c *APIClient) parseAssignees(data map[string]interface{}, patentId uuid.UUID) (
+//	*[]model.StandardizedCurrentAssignee, *[]model.PatentStandardizedCurrentAssigneeLink) {
+//	assignees := make([]model.StandardizedCurrentAssignee, 0)
+//	assigneePatentLink := make([]model.PatentStandardizedCurrentAssigneeLink, 0)
+//	assigneesList, ok := data["currentAssignees"].([]interface{})
+//	if ok {
+//		for _, name := range assigneesList {
+//			parsedInventorName, ok := name.(map[string]interface{})
+//			if ok {
+//				if parsedName, ok := parsedInventorName["partyNameClean"].(string); ok {
+//					assignees = append(assignees, model.StandardizedCurrentAssignee{Name: parsedName})
+//					assigneePatentLink = append(assigneePatentLink, model.PatentStandardizedCurrentAssigneeLink{
+//						PatentID: patentId, AssigneeName: parsedName})
+//				} else if parsedName, ok := parsedInventorName["partyName"].(string); ok {
+//					assignees = append(assignees, model.StandardizedCurrentAssignee{Name: parsedName})
+//					assigneePatentLink = append(assigneePatentLink, model.PatentStandardizedCurrentAssigneeLink{
+//						PatentID: patentId, AssigneeName: parsedName})
+//				}
+//			}
+//		}
+//	}
+//	return &assignees, &assigneePatentLink
+//}
 
-func (c *APIClient) parseJurisdictions(data map[string]interface{}, patentId uuid.UUID, minPriorityDate time.Time) (
-	*[]model.SimpleFamilyJurisdiction, *[]model.PatentSimpleFamilyJurisdictionLink) {
-
-	jurisdictions := make([]model.SimpleFamilyJurisdiction, 0)
-	jurisdictionPatentLink := make([]model.PatentSimpleFamilyJurisdictionLink, 0)
-
-	minPriorityDateStr := minPriorityDate.Format("2006-01-02") // Adjust the format as needed
-
-	claimsList, ok := data["priorityClaims"].([]interface{})
-	if ok {
-		for _, claim := range claimsList {
-			if parsedClaim, ok := claim.(map[string]interface{}); ok {
-				if claimDate, ok := parsedClaim["documentDate"].(string); ok && claimDate == minPriorityDateStr {
-					if country, ok := parsedClaim["country"].(string); ok {
-						jurisdictions = append(jurisdictions, model.SimpleFamilyJurisdiction{Name: country})
-						jurisdictionPatentLink = append(jurisdictionPatentLink, model.PatentSimpleFamilyJurisdictionLink{
-							JurisdictionName: country, PatentID: patentId})
-					}
-				}
-			}
-		}
-	}
-	return &jurisdictions, &jurisdictionPatentLink
-}
+//func (c *APIClient) parseJurisdictions(data map[string]interface{}, patentId uuid.UUID, minPriorityDate time.Time) (
+//	*[]model.SimpleFamilyJurisdiction, *[]model.PatentSimpleFamilyJurisdictionLink) {
+//
+//	jurisdictions := make([]model.SimpleFamilyJurisdiction, 0)
+//	jurisdictionPatentLink := make([]model.PatentSimpleFamilyJurisdictionLink, 0)
+//
+//	minPriorityDateStr := minPriorityDate.Format("2006-01-02") // Adjust the format as needed
+//
+//	claimsList, ok := data["priorityClaims"].([]interface{})
+//	if ok {
+//		for _, claim := range claimsList {
+//			if parsedClaim, ok := claim.(map[string]interface{}); ok {
+//				if claimDate, ok := parsedClaim["documentDate"].(string); ok && claimDate == minPriorityDateStr {
+//					if country, ok := parsedClaim["country"].(string); ok {
+//						jurisdictions = append(jurisdictions, model.SimpleFamilyJurisdiction{Name: country})
+//						jurisdictionPatentLink = append(jurisdictionPatentLink, model.PatentSimpleFamilyJurisdictionLink{
+//							JurisdictionName: country, PatentID: patentId})
+//					}
+//				}
+//			}
+//		}
+//	}
+//	return &jurisdictions, &jurisdictionPatentLink
+//}
 
 type claimMapKey struct {
 	claimID     string

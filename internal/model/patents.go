@@ -95,3 +95,21 @@ type ParsedPatentDataDB struct {
 	PatentAssigneesLink     *[]PatentStandardizedCurrentAssigneeLink
 	PatentJurisdictionsLink *[]PatentSimpleFamilyJurisdictionLink
 }
+
+type FilteredPatent struct {
+	Title                    string     `json:"title"`
+	PublicationNumber        string     `json:"publication_number"`
+	EarliestPriorityDate     *time.Time `json:"earliest_priority_date"`
+	EstimatedExpiryDate      *time.Time `json:"estimated_expiry_date"`
+	InventorsNames           []string   `json:"inventors_names"`
+	Assignee                 []string   `json:"assignee"`
+	SimpleFamilyJurisdiction []string   `json:"simple_family_jurisdiction"`
+	ApplicationDate          *time.Time `json:"application_date"`
+	SimpleLegalStatus        *string    `json:"simple_legal_status"`
+}
+
+type FilteredPatentsResponse struct {
+	Patents      *[]FilteredPatent       `json:"patents"`
+	Statistics   *map[string]interface{} `json:"statistics"`
+	TotalPatents int                     `json:"total_patents"`
+}
