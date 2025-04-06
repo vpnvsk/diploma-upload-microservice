@@ -53,7 +53,6 @@ func (r *KTMineRepository) GetFilteredData(filters model.FilterInterface) (*[]by
 		log.Error("Error making POST request: status code", resp.StatusCode)
 		return nil, err
 	}
-	fmt.Println(resp.StatusCode)
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
