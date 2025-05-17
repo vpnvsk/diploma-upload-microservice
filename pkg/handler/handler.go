@@ -2,8 +2,10 @@ package handler
 
 import (
 	"github.com/gin-gonic/gin"
+	"github.com/vpnvsk/amunetip-patent-upload/internal/logger"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/service"
 	"log/slog"
+	"net/http"
 )
 
 type Handler struct {
@@ -18,16 +20,11 @@ func NewHandler(log *slog.Logger, service *service.Service) *Handler {
 	}
 }
 
-func (h *Handler) InitRoutes() *gin.Engine {
-	router := gin.New()
-	api := router.Group("/api")
-	{
-		auth := api.Group("/upload")
-		{
-			auth.POST("/", h.Upload)
-		}
-	}
-	return router
+func (h *Handler) InitRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.Handle("/filter", logger.LoggingMiddleware(h.log, http.HandlerFunc(h.filterPatents)))
+	mux.Handle("/upload", logger.LoggingMiddleware(h.log, http.HandlerFunc(h.UploadPatents)))
+	return mux
 }
 
 func (h *Handler) Upload(c *gin.Context) {}

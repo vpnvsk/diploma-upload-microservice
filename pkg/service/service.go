@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
+	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/repository"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/service/api_client"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/service/db_client"
@@ -9,19 +12,21 @@ import (
 
 type Service struct {
 	log *slog.Logger
-	APIClient
+	APIClientInterface
 	DBClient
 }
 
-func NewService(log *slog.Logger, repo *repository.Repository) *Service {
+func NewService(log *slog.Logger, repo *repository.Repository, cfg *config.Config) *Service {
 	return &Service{
-		log:       log,
-		APIClient: api_client.NewAPIClient(log, &repo.KTMineRepository),
-		DBClient:  db_client.NewDBClient(log, &repo.DBRepository),
+		log:                log,
+		APIClientInterface: api_client.NewAPIClient(log, repo.KTMineRepositoryInterface, cfg),
+		DBClient:           db_client.NewDBClient(log, &repo.DBRepository),
 	}
 }
 
-type APIClient interface {
+type APIClientInterface interface {
+	GetData(input model.UploadInput) error
+	FilterPatents(ctx context.Context, req model.Filters) (*model.FilteredPatentsResponse, error)
 }
 
 type DBClient interface {
