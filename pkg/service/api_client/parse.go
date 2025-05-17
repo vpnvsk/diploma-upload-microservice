@@ -162,13 +162,12 @@ func (c *APIClient) parseStatistics(payload *[]byte) (*map[string]interface{}, i
 		return nil, 0, errors.New("missing or invalid 'aggregations' field")
 	}
 
-	// Ensure correct type conversion for totalPatents
 	totalFound, ok := response["totalFound"]
 	if !ok {
 		return nil, 0, errors.New("missing 'totalFound' in response")
 	}
 
-	totalPatents, ok := totalFound.(float64) // JSON numbers are float64 by default
+	totalPatents, ok := totalFound.(float64)
 	if !ok {
 		return nil, 0, fmt.Errorf("invalid 'totalFound' type: expected float64, got %T", totalFound)
 	}

@@ -52,3 +52,14 @@ type Filters struct {
 	Limit           *int            `json:"limit"`
 	Offset          *int            `json:"offset"`
 }
+
+func (f *Filters) Sanitize() {
+	if f.Offset == nil {
+		offset := 0
+		f.Offset = &offset
+	}
+	if f.Limit == nil {
+		limit := 10
+		f.Limit = &limit
+	}
+}

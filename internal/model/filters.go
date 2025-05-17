@@ -11,7 +11,6 @@ var advancedAggs = []map[string]string{
 	{"field": "document_country", "name": "Document Country", "type": "terms"},
 	{"field": "legal_status", "name": "Legal Status", "type": "terms"},
 	{"field": "classifications_cpc.section_top_class_sub_class", "name": "Top Level CPCs", "type": "terms"},
-	{"field": "inventors.party_name.raw", "name": "Inventor Name", "type": "terms"},
 }
 
 const (
@@ -51,19 +50,18 @@ type FilterInterface interface {
 }
 
 type FiltersRequestBody struct {
-	Filters       []SingleParsedFilter `json:"filters"`
-	ReturnFields  []string             `json:"returnFields"`
-	Key           string               `json:"key"`
-	SortField     string               `json:"sortField"`
-	SortDirection string               `json:"sortDirection"`
-	Start         int                  `json:"start"`
-	Count         int                  `json:"count"`
-	PreFilter     *bool                `json:"preFilter,omitempty"`
+	Filters      []SingleParsedFilter `json:"filters"`
+	ReturnFields []string             `json:"returnFields"`
+	Key          string               `json:"key"`
+	Start        int                  `json:"start"`
+	Count        int                  `json:"count"`
+	PreFilter    *bool                `json:"preFilter,omitempty"`
 }
 
 func (f FiltersRequestBody) GetFilters() []SingleParsedFilter { return f.Filters }
 
-func NewFilterRequestBody(filters []SingleParsedFilter, key string, start, count int, preFilter *bool, returnFields []string) FiltersRequestBody {
+func NewFilterRequestBody(
+	filters []SingleParsedFilter, key string, start, count int, preFilter *bool, returnFields []string) FiltersRequestBody {
 	var preFilterParsed bool
 	if preFilter != nil {
 		preFilterParsed = *preFilter
@@ -71,14 +69,12 @@ func NewFilterRequestBody(filters []SingleParsedFilter, key string, start, count
 		preFilterParsed = false
 	}
 	return FiltersRequestBody{
-		Filters:       filters,
-		ReturnFields:  returnFields,
-		Key:           key,
-		SortField:     "docdb_document_number",
-		SortDirection: "asc",
-		Start:         start,
-		Count:         count,
-		PreFilter:     &preFilterParsed,
+		Filters:      filters,
+		ReturnFields: returnFields,
+		Key:          key,
+		Start:        start,
+		Count:        count,
+		PreFilter:    &preFilterParsed,
 	}
 }
 

@@ -28,17 +28,8 @@ type FilteredResponse struct {
 }
 
 func (c *APIClient) FilterPatents(req model.Filters) (*model.FilteredPatentsResponse, error) {
-	var limit, offset int
-	if req.Offset == nil {
-		offset = 10
-	} else {
-		offset = *req.Offset
-	}
-	if req.Limit == nil {
-		limit = 10
-	} else {
-		limit = *req.Limit
-	}
+	limit := *req.Limit
+	offset := *req.Offset
 	parsedResponse := make([]model.FilteredPatent, 0, limit)
 
 	response := FilteredResponse{
@@ -53,11 +44,17 @@ func (c *APIClient) FilterPatents(req model.Filters) (*model.FilteredPatentsResp
 	for i := 0; i < limit; i = i + 5 {
 		wg.Add(1)
 		go func(i int) {
+			local := make([]model.FilteredPatent, 0, chunkSize)
 			defer wg.Done()
-			c.getFilteredChunk(parsedFilters, offset*limit+i, req.PreFilter, &response)
+			c.getFilteredChunk(parsedFilters, offset*limit+i, req.PreFilter, &local)
+			response.mu.Lock()
+			*response.response = append(*response.response, local...)
+			response.mu.Unlock()
 		}(i)
 	}
+
 	responseWithStats := &model.FilteredPatentsResponse{}
+
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -68,7 +65,7 @@ func (c *APIClient) FilterPatents(req model.Filters) (*model.FilteredPatentsResp
 	return responseWithStats, err
 }
 
-func (c *APIClient) getFilteredChunk(parsedFilters []model.SingleParsedFilter, offset int, preFilter *bool, response *FilteredResponse) {
+func (c *APIClient) getFilteredChunk(parsedFilters []model.SingleParsedFilter, offset int, preFilter *bool, response *[]model.FilteredPatent) {
 	patents, err := c.repo.GetFilteredData(
 		model.NewFilterRequestBody(parsedFilters, c.cfg.KTMineAPIKey, offset, 5, preFilter, returnFields),
 	)
@@ -85,15 +82,17 @@ func (c *APIClient) getStatistics(parsedFilters []model.SingleParsedFilter, pars
 	if err != nil {
 		fmt.Println(err)
 	}
-	stats, totalPatents, err := c.parseStatistics(response)
+
+	result, totalPatents, err := c.parseStatistics(response)
 	if err != nil {
 		fmt.Println(err)
 	}
-	parsedResponse.Statistics = stats
+
+	parsedResponse.Statistics = result
 	parsedResponse.TotalPatents = totalPatents
 }
 
-func (c *APIClient) parseFilteredResponse(patents *[]byte, parsedResponse *FilteredResponse) error {
+func (c *APIClient) parseFilteredResponse(patents *[]byte, parsedResponse *[]model.FilteredPatent) error {
 	var data map[string]interface{}
 	err := json.Unmarshal(*patents, &data)
 	if err != nil {
@@ -106,9 +105,7 @@ func (c *APIClient) parseFilteredResponse(patents *[]byte, parsedResponse *Filte
 	items, ok := response["items"].([]interface{})
 	for _, patent := range items {
 		parsedPatent := c.parseFilteredPatent(patent)
-		parsedResponse.mu.Lock()
-		*parsedResponse.response = append(*parsedResponse.response, parsedPatent)
-		parsedResponse.mu.Unlock()
+		*parsedResponse = append(*parsedResponse, parsedPatent)
 	}
 	return nil
 }
