@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	_ "github.com/lib/pq"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
@@ -33,7 +34,7 @@ func NewRepository(log *slog.Logger, cfg *config.Config) *Repository {
 }
 
 type KTMineRepositoryInterface interface {
-	GetFilteredData(filters model.FilterInterface) (*[]byte, error)
+	GetFilteredData(ctx context.Context, filters model.FilterInterface) (*[]byte, error)
 }
 
 type DBRepository interface {

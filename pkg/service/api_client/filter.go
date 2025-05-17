@@ -1,10 +1,12 @@
 package api_client
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
+	"golang.org/x/sync/errgroup"
 	"reflect"
 	"strings"
 	"sync"
@@ -27,69 +29,99 @@ type FilteredResponse struct {
 	response *[]model.FilteredPatent
 }
 
-func (c *APIClient) FilterPatents(req model.Filters) (*model.FilteredPatentsResponse, error) {
+func (c *APIClient) FilterPatents(ctx context.Context, req model.Filters) (*model.FilteredPatentsResponse, error) {
 	limit := *req.Limit
 	offset := *req.Offset
-	parsedResponse := make([]model.FilteredPatent, 0, limit)
+	g, ctx := errgroup.WithContext(ctx)
 
-	response := FilteredResponse{
-		mu:       sync.Mutex{},
-		response: &parsedResponse,
-	}
+	var mu sync.Mutex
+	patents := make([]model.FilteredPatent, 0, limit)
 	parsedFilters, err := c.parseFilters(req)
 	if err != nil {
 		return nil, err
 	}
-	var wg sync.WaitGroup
+
 	for i := 0; i < limit; i = i + 5 {
-		wg.Add(1)
-		go func(i int) {
+		off := i
+		g.Go(func() error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			local := make([]model.FilteredPatent, 0, chunkSize)
-			defer wg.Done()
-			c.getFilteredChunk(parsedFilters, offset*limit+i, req.PreFilter, &local)
-			response.mu.Lock()
-			*response.response = append(*response.response, local...)
-			response.mu.Unlock()
-		}(i)
+
+			err := c.getFilteredChunk(ctx, parsedFilters, offset*limit+off, req.PreFilter, &local)
+			if err != nil {
+				return fmt.Errorf("chunk @%d: %w", off, err)
+			}
+
+			mu.Lock()
+			patents = append(patents, local...)
+			mu.Unlock()
+			return nil
+		})
 	}
 
 	responseWithStats := &model.FilteredPatentsResponse{}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		c.getStatistics(parsedFilters, responseWithStats)
-	}()
-	wg.Wait()
-	responseWithStats.Patents = response.response
+	g.Go(func() error {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		err := c.getStatistics(ctx, parsedFilters, responseWithStats)
+		if err != nil {
+			return fmt.Errorf("error getting statistics: %w", err)
+		}
+		return nil
+	})
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	responseWithStats.Patents = &patents
 	return responseWithStats, err
 }
 
-func (c *APIClient) getFilteredChunk(parsedFilters []model.SingleParsedFilter, offset int, preFilter *bool, response *[]model.FilteredPatent) {
+func (c *APIClient) getFilteredChunk(
+	ctx context.Context,
+	parsedFilters []model.SingleParsedFilter,
+	offset int,
+	preFilter *bool,
+	response *[]model.FilteredPatent,
+) error {
 	patents, err := c.repo.GetFilteredData(
-		model.NewFilterRequestBody(parsedFilters, c.cfg.KTMineAPIKey, offset, 5, preFilter, returnFields),
+		ctx, model.NewFilterRequestBody(parsedFilters, c.cfg.KTMineAPIKey, offset, 5, preFilter, returnFields),
 	)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 	if err = c.parseFilteredResponse(patents, response); err != nil {
-		fmt.Println(err)
+		return err
 	}
+	return nil
 }
 
-func (c *APIClient) getStatistics(parsedFilters []model.SingleParsedFilter, parsedResponse *model.FilteredPatentsResponse) {
-	response, err := c.repo.GetFilteredData(model.NewStatisticsRequestBody(parsedFilters, c.cfg.KTMineAPIKey))
+func (c *APIClient) getStatistics(
+	ctx context.Context,
+	parsedFilters []model.SingleParsedFilter,
+	parsedResponse *model.FilteredPatentsResponse,
+) error {
+	response, err := c.repo.GetFilteredData(ctx, model.NewStatisticsRequestBody(parsedFilters, c.cfg.KTMineAPIKey))
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	result, totalPatents, err := c.parseStatistics(response)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	parsedResponse.Statistics = result
 	parsedResponse.TotalPatents = totalPatents
+	return nil
 }
 
 func (c *APIClient) parseFilteredResponse(patents *[]byte, parsedResponse *[]model.FilteredPatent) error {

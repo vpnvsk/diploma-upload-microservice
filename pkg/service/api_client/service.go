@@ -69,20 +69,6 @@ func (c *APIClient) GetData(input model.UploadInput) error {
 //	return err
 //}
 
-func (c *APIClient) sendRequest(requestBody model.FiltersRequestBody) (*[]byte, error) {
-	var body *[]byte
-	var err error
-	for i := 0; i < 3; i++ {
-		body, err = c.repo.GetFilteredData(requestBody)
-		if err != nil {
-			continue
-		} else {
-			return body, err
-		}
-	}
-	return body, err
-}
-
 //func (c *APIClient) parseResponse(body *[]byte, ch chan *model.ParsedPatentsData) error {
 //	var data map[string]interface{}
 //	err := json.Unmarshal(*body, &data)

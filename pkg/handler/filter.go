@@ -13,6 +13,7 @@ func (h *Handler) filterPatents(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	ctx := r.Context()
 
 	var req model.Filters
 	decoder := json.NewDecoder(r.Body)
@@ -23,7 +24,7 @@ func (h *Handler) filterPatents(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Sanitize()
 
-	patents, err := h.service.FilterPatents(req)
+	patents, err := h.service.FilterPatents(ctx, req)
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return

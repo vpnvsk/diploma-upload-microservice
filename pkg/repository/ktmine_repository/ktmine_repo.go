@@ -2,6 +2,7 @@ package ktmine_repository
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
@@ -35,7 +36,7 @@ func NewKTMineRepository(log *slog.Logger, cfg *config.Config) *KTMineRepository
 	}
 }
 
-func (r *KTMineRepository) GetFilteredData(filters model.FilterInterface) (*[]byte, error) {
+func (r *KTMineRepository) GetFilteredData(ctx context.Context, filters model.FilterInterface) (*[]byte, error) {
 	op := "repository.GetFilteredData"
 	log := r.log.With(slog.String("op", op))
 
@@ -44,7 +45,13 @@ func (r *KTMineRepository) GetFilteredData(filters model.FilterInterface) (*[]by
 		log.Error("error marshaling request body", err)
 		return nil, err
 	}
-	req, err := http.NewRequest("POST", fmt.Sprintf("%s/search", r.cfg.KTMineURL), bytes.NewBuffer(requestBody))
+
+	req, err := http.NewRequestWithContext(
+		ctx,
+		"POST",
+		fmt.Sprintf("%s/search", r.cfg.KTMineURL),
+		bytes.NewBuffer(requestBody),
+	)
 	if err != nil {
 		log.Error("Error creating request:", err)
 		return nil, err
@@ -56,15 +63,15 @@ func (r *KTMineRepository) GetFilteredData(filters model.FilterInterface) (*[]by
 		log.Error("Error making POST request:", err)
 		return nil, err
 	}
-	if resp.StatusCode > 299 || resp.StatusCode < 200 {
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		log.Error("Error making POST request: status code", resp.StatusCode)
-		return nil, err
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
 	return &body, nil
 }

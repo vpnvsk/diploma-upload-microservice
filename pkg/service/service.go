@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/config"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
 	"github.com/vpnvsk/amunetip-patent-upload/pkg/repository"
@@ -25,7 +26,7 @@ func NewService(log *slog.Logger, repo *repository.Repository, cfg *config.Confi
 
 type APIClientInterface interface {
 	GetData(input model.UploadInput) error
-	FilterPatents(req model.Filters) (*model.FilteredPatentsResponse, error)
+	FilterPatents(ctx context.Context, req model.Filters) (*model.FilteredPatentsResponse, error)
 }
 
 type DBClient interface {
