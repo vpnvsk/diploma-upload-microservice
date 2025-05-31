@@ -21,6 +21,8 @@ func main() {
 	serv := service.NewService(log, repo, cfg)
 	handl := handler.NewHandler(log, serv)
 	srv := new(internal.Server)
+	ctx := context.Background()
+	go handl.HandlePatentUpload(ctx)
 	go func() {
 		log.Info("server started on port: 8080")
 		if err := srv.Run("8080", handl.InitRoutes()); err != nil {
