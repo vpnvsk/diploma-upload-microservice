@@ -24,6 +24,12 @@ var returnFields = []string{
 	"app_pub_references",
 }
 
+var fullPatentReturnFields = []string{
+	"descriptions",
+	"abstract",
+	"images",
+}
+
 type FilteredResponse struct {
 	mu       sync.Mutex
 	response *[]model.FilteredPatent
@@ -36,7 +42,7 @@ func (c *APIClient) FilterPatents(ctx context.Context, req model.Filters) (*mode
 
 	var mu sync.Mutex
 	patents := make([]model.FilteredPatent, 0, limit)
-	parsedFilters, err := c.parseFilters(req)
+	parsedFilters, err := c.ParseFilters(req)
 	if err != nil {
 		return nil, err
 	}
@@ -72,10 +78,12 @@ func (c *APIClient) FilterPatents(ctx context.Context, req model.Filters) (*mode
 			return ctx.Err()
 		default:
 		}
-		err := c.getStatistics(ctx, parsedFilters, responseWithStats)
+		statistics, totalPatent, err := c.GetStatistics(ctx, parsedFilters)
 		if err != nil {
 			return fmt.Errorf("error getting statistics: %w", err)
 		}
+		responseWithStats.TotalPatents = totalPatent
+		responseWithStats.Statistics = statistics
 		return nil
 	})
 	if err := g.Wait(); err != nil {
@@ -104,24 +112,33 @@ func (c *APIClient) getFilteredChunk(
 	return nil
 }
 
-func (c *APIClient) getStatistics(
+func (c *APIClient) GetFilteredChunkFullPatentRaw(
 	ctx context.Context,
 	parsedFilters []model.SingleParsedFilter,
-	parsedResponse *model.FilteredPatentsResponse,
-) error {
+	offset int,
+	limit int,
+) (*[]byte, error) {
+	returnFieldsFull := append(returnFields, fullPatentReturnFields...)
+	patents, err := c.repo.GetFilteredData(
+		ctx, model.NewFilterRequestBody(parsedFilters, c.cfg.KTMineAPIKey, offset, limit, nil, returnFieldsFull),
+	)
+	return patents, err
+}
+
+func (c *APIClient) GetStatistics(
+	ctx context.Context,
+	parsedFilters []model.SingleParsedFilter,
+) (*map[string]interface{}, int, error) {
 	response, err := c.repo.GetFilteredData(ctx, model.NewStatisticsRequestBody(parsedFilters, c.cfg.KTMineAPIKey))
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 
 	result, totalPatents, err := c.parseStatistics(response)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
-
-	parsedResponse.Statistics = result
-	parsedResponse.TotalPatents = totalPatents
-	return nil
+	return result, totalPatents, nil
 }
 
 func (c *APIClient) parseFilteredResponse(patents *[]byte, parsedResponse *[]model.FilteredPatent) error {
@@ -166,7 +183,7 @@ func (c *APIClient) parseTermsFilters(termFilter string) string {
 	return builder.String()
 }
 
-func (c *APIClient) parseFilters(filters model.Filters) ([]model.SingleParsedFilter, error) {
+func (c *APIClient) ParseFilters(filters model.Filters) ([]model.SingleParsedFilter, error) {
 	var parsedFilters []model.SingleParsedFilter
 
 	if filters.TermsFilters != nil {

@@ -113,3 +113,10 @@ type FilteredPatentsResponse struct {
 	Statistics   *map[string]interface{} `json:"statistics"`
 	TotalPatents int                     `json:"total_patents"`
 }
+
+type FilteredFullPatent struct {
+	Patent      FilteredPatent
+	ID          uuid.UUID
+	Description string
+	Abstract    string
+}

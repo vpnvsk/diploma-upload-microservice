@@ -4,7 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"github.com/vpnvsk/amunetip-patent-upload/internal/model"
+	"github.com/vpnvsk/amunetip-patent-upload/internal/utils"
+	"strings"
 	"time"
 )
 
@@ -145,6 +148,44 @@ func (c *APIClient) parseFilteredPatent(patent interface{}) model.FilteredPatent
 		SimpleLegalStatus:        &simpleLegalStatus,
 	}
 }
+
+func (c *APIClient) ParseFullPatent(patent interface{}) model.FilteredFullPatent {
+	parsed := c.parseFilteredPatent(patent)
+	parsedPatent, _ := patent.(map[string]interface{})
+	var parsedAbstract string
+	if abstract, ok := parsedPatent["abstractParagraphs"].([]interface{}); ok {
+		for _, abstractObject := range abstract {
+			if parsedAbstractObject, ok := abstractObject.(map[string]interface{}); ok {
+				if lang, ok := parsedAbstractObject["lang"].(string); ok && lang == "en" {
+					if text, ok := parsedAbstractObject["plainText"].(string); ok {
+						parsedAbstract = utils.RemoveHTMLTags(text)
+					}
+				}
+			}
+		}
+	}
+	var builder strings.Builder
+	if description, ok := parsedPatent["descriptions"].([]interface{}); ok {
+		for _, descriptionObject := range description {
+			if parsedDescriptionObject, ok := descriptionObject.(map[string]interface{}); ok {
+				if lang, ok := parsedDescriptionObject["lang"].(string); ok && lang == "en" {
+					if text, ok := parsedDescriptionObject["plainText"].(string); ok {
+						builder.WriteString("\n")
+						builder.WriteString(text)
+					}
+				}
+			}
+		}
+	}
+	parsedDescription := builder.String()
+	return model.FilteredFullPatent{
+		Patent:      parsed,
+		ID:          uuid.New(),
+		Description: parsedDescription,
+		Abstract:    parsedAbstract,
+	}
+}
+
 func (c *APIClient) parseStatistics(payload *[]byte) (*map[string]interface{}, int, error) {
 	var data map[string]interface{}
 	err := json.Unmarshal(*payload, &data)

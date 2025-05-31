@@ -61,7 +61,13 @@ type FiltersRequestBody struct {
 func (f FiltersRequestBody) GetFilters() []SingleParsedFilter { return f.Filters }
 
 func NewFilterRequestBody(
-	filters []SingleParsedFilter, key string, start, count int, preFilter *bool, returnFields []string) FiltersRequestBody {
+	filters []SingleParsedFilter,
+	key string,
+	start,
+	count int,
+	preFilter *bool,
+	returnFields []string,
+) FiltersRequestBody {
 	var preFilterParsed bool
 	if preFilter != nil {
 		preFilterParsed = *preFilter

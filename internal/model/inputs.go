@@ -63,3 +63,10 @@ func (f *Filters) Sanitize() {
 		f.Limit = &limit
 	}
 }
+
+type UploadPatentPayload struct {
+	BundleId      uuid.UUID  `json:"bundle_id"`
+	TransactionId uuid.UUID  `json:"transaction_id"`
+	CollectionId  *uuid.UUID `json:"collection_id"`
+	Filters       Filters    `json:"filters"`
+}
