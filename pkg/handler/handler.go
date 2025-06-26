@@ -23,7 +23,7 @@ func NewHandler(log *slog.Logger, service *service.Service) *Handler {
 
 func (h *Handler) InitRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
-	mux.Handle("/filter", logger.LoggingMiddleware(h.log, http.HandlerFunc(h.filterPatents)))
+	mux.Handle("/upload/filter", logger.LoggingMiddleware(h.log, http.HandlerFunc(h.filterPatents)))
 	mux.Handle("/upload", logger.LoggingMiddleware(h.log, http.HandlerFunc(h.UploadPatents)))
 	return mux
 }
