@@ -25,7 +25,7 @@ func main() {
 	go handl.HandlePatentUpload(ctx)
 	go func() {
 		log.Info("server started on port: 8080")
-		if err := srv.Run("8080", handl.InitRoutes()); err != nil {
+		if err := srv.Run("7000", handl.InitRoutes()); err != nil {
 			errorMessage := fmt.Sprintf("error while running server %s", err.Error())
 			panic(errorMessage)
 		}

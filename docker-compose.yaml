@@ -1,0 +1,16 @@
+services:
+  upload:
+    build: ./
+    container_name: upload
+    ports:
+      - "7000:7000"
+    env_file:
+      - .env
+    networks:
+      - patents-net
+    restart: on-failure
+
+
+networks:
+  patents-net:
+    external: true
